@@ -1,0 +1,232 @@
+---
+title: "NHS Funding"
+author: "Tobias Leigh-Wood"
+date: "8th December 2022"
+output: beamer_presentation
+editor_options: 
+  chunk_output_type: console
+header-includes:
+  - \usepackage{multicol}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+setwd(dirname(rstudioapi::getSourceEditorContext()$path))
+library(data.table)
+library(dplyr)
+library(stringr)
+library(readxl)
+library(tidyr)
+library(ggplot2)
+library(lubridate)
+
+
+```
+
+## Road map
+
+- NHS in crisis
+- What is the policy?
+- What evidence does the government have?
+- What better evidence is out there?
+- Conclusion
+
+## NHS in crisis
+```{r nhs_crisis, echo=FALSE, include=FALSE}
+# Data taken from 
+# https://www.england.nhs.uk/statistics/statistical-work-areas/rtt-waiting-times/rtt-data-2021-22/
+
+commissioner_files <- dir("data/rtt_waiting_times/", 
+                          full.names = T, 
+                          pattern = "Commission", 
+                          recursive = T)
+
+ReadAndClean <- function(filename){
+  
+  month_year <- str_extract(filename, "(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\d{2}")
+  
+  data <- read_xls(filename, 
+                   skip = 13, 
+                   sheet = "National") %>% 
+  rename_with( ~ gsub(" ", "_", str_to_lower(.x))) %>% 
+  filter(treatment_function == "Total")
+  
+  if (!"52_plus" %in% names(data)){
+    clean_data <- data %>%
+      tidyr::pivot_longer(matches(">\\d"), 
+                      names_to = "weeks") %>%
+      mutate(week = stringi::stri_extract_last(weeks,
+                                               regex = "\\d{1,3}")) %>%
+      mutate(week = as.numeric(week)) %>%
+      mutate(week = fifelse(week > 52, "52_plus",
+                            as.character(week))) %>%
+      group_by(week) %>%
+      summarise(value = sum(value)) %>% 
+      mutate(period = month_year) %>%
+      select(period, week, value)
+    
+  } else {
+    
+    clean_data <- data %>% 
+      tidyr::pivot_longer(matches(">\\d|52_plus"), 
+                      names_to = "weeks") %>%
+      mutate(week = stringi::stri_extract_last(weeks,
+                                           regex = "\\d{1,3}")) %>%
+      mutate(week = fifelse(weeks == "52_plus", 
+                            "52_plus", 
+                            week)) %>% 
+      mutate(period = month_year) %>%
+      select(period, week, value)
+    
+  }
+
+  return(clean_data)
+}
+
+joined_data <- lapply(commissioner_files, 
+       ReadAndClean) %>% 
+  rbindlist() %>% 
+  mutate(period = my(period))
+
+plot_data <- joined_data %>% 
+  group_by(period) %>%
+  mutate(week_num = as.numeric(str_extract(week, "\\d{1,2}"))) %>% 
+  summarise(sum_patients = sum(value), 
+            prop_more_18_weeks = sum(value[week_num > 18])/sum(value))
+
+
+# Incomplete pathways are those currently waiting to be seen at the end of the month who haven't started treatment yet
+
+
+```
+
+```{r NHS_plot, fig.cap="Referral to Treatment Waiting Times", fig.width=6, fig.height=4}
+ggplot(plot_data, 
+       aes(x = period, 
+           y = prop_more_18_weeks)) + 
+  geom_point() + 
+  labs(x = "Period", 
+       y = "", 
+       title = "Proportion of patients waiting longer than 18 weeks", 
+       caption = "Data source: Consultant-led Referral to Treatment Waiting Times NHS Digital") + 
+  scale_y_continuous(labels = scales::percent, 
+                     limits = c(0, 0.6))
+
+```
+
+
+
+## NHS in crisis
+
+- The number waiting more than a year went from 174 people in September 2013 to almost 400,000 in September 2022.
+- Only 2% of ambulance handovers took more than an hour in October 2019. By October 2022 this had risen to 18%.
+- 474 GP surgeries have closed without replacement since 2013 and there are now also 2505 fewer full-time equivalent GPs.
+
+## Policy proposal
+
+- National Insurance Contribution (NIC) tax cut.
+  - For most people this is currently paid if your monthly income is greater than £1,048.01. 
+- From 12% to 2% if someone opts out of using the NHS and joins a Private Medical Insurance program. 
+- Other taxes to remain the same. Employer's NI contributions will stay constant for all. 
+
+## Government evidence
+
+- The government suggests this will save the NHS £3,000 per person and cost the government £1,700 in reduced taxes.
+- NHS savings are based off a rough calculation of total NHS budget (£190 billion in 2021) divided  by number of people in the UK (67 million).
+- Cost savings approximated by average taxable wage (around £20,000) multiplied by 10% $\approx$ £1,700.
+- The government should publish its exact calculations so that they can be scrutinised.
+
+
+## Assumptions
+
+- These rough numbers do not reflect who uses NHS services and who pays taxes.
+- People who use the NHS are likely to be poorer, not in work, and elderly or very young.
+- People who pay NICs are likely to be wealthier, in work, healthier and of working age.
+
+## Work and NHS use
+
+
+- ONS statistics for September 2022 show the East of England having the highest employment rate at 79.1 percent and Wales having one of the lowest at 72.3 percent. 
+- Statista show that the East of England had the lowest NHS cost per capita in the UK at £2,889 whilst per capita expenditures in Wales were £3,459.
+
+- Work and wealth correlated with lower health spending. 
+
+
+## Insurance options
+
+\begin{multicols}{2}
+  \begin{figure}
+  \caption{Non-smoker 23 low IMD \label{young_nonsmoker}}
+  \includegraphics[width=.6\textwidth]{charts and figures/compare_the_market_non_smoker_23_ba1.png}
+  \end{figure}
+  
+  \begin{itemize}
+  \item Insurance cheaper for working age
+  \end{itemize}
+  \vfill \null
+
+\columnbreak
+
+ \begin{figure}
+  \caption{Smoker 62 high IMD \label{old_smoker}}
+  \includegraphics[width=.6\textwidth]{charts and figures/compare_the_market_smoker_62_se17.png}
+  \end{figure}
+  
+  \vfill \null
+
+\end{multicols}
+
+
+## Insurance cost
+
+- When someone needs health care that exceeds the cost of their private care plan and their premiums increase they will go back to NHS. Individuals won't "take responsibility for their own health".
+- Insurers could offer very cheap basic insurance plans knowing that the NHS will pick up the bill if their clients get sick. Individuals would buy this knowing that they will just use the NHS when needed.
+
+## Other costs
+
+- Would NHS doctors flatly refuse to serve some people and ambulances not pick some people up? Chasing non-payers would require an expanded compliance system.
+- Administrative costs in America are double those in other OECD countries, partly as a result of complex insurance systems.
+- Future health shocks might mean large government expenditures to subsidise private provision (COVID-19) with a reduced tax base.
+
+## Overall
+
+- Not a good policy, will end up costing the government more through lost tax revenue than saved through reduced NHS expenditure.
+- Cost to administer will also be high.
+
+
+## Appendix
+
+```{r distribution data, include = FALSE}
+
+distribution_plot <- joined_data %>% 
+  filter(period %in% as.Date(c("2012-09-01", "2019-09-01", "2022-09-01"))) %>% 
+  mutate(week = factor(week, levels = c(1:52, "52_plus")))
+```
+
+```{r distribution plot, fig.cap="Distribution of waiting times"}
+ggplot(distribution_plot, aes(x = week, 
+                              y = value, 
+                              colour = factor(period))) + 
+  geom_point() + 
+  labs(x = "Week", 
+       y = "Patients", 
+       colour = "Period", 
+       caption = "Source: Consultant-led Referral to Treatment Waiting Times NHS Digital") + 
+  scale_x_discrete(breaks = c(seq.int(1, 50, 10), "52_plus"), 
+                   labels = c(seq.int(1, 50, 10), "52 Plus")) + 
+  scale_y_continuous(labels = scales::comma) + 
+  geom_point(data = distribution_plot[distribution_plot$value == max(distribution_plot$value), ], colour="red", shape=1, size=4, stroke=1.5)
+
+```
+
+
+
+## References 
+
+- Click on the link
+- [Employment stats](https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/employmentandemployeetypes/bulletins/regionallabourmarket/november2022)
+- [Regional costs](https://www.statista.com/statistics/651514/uk-health-spending-per-person-by-region/)
+- [NHS RTT Waiting Times](https://www.england.nhs.uk/statistics/statistical-work-areas/rtt-waiting-times/)
+
+
+
