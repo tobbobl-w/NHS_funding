@@ -204,7 +204,6 @@ distribution_plot <- joined_data %>%
   mutate(week = factor(week, levels = c(1:52, "52_plus")))
 ```
 
-- Circled dot shows patients currently waiting for more than a year
 
 ```{r distribution plot, fig.cap="Distribution of waiting times"}
 ggplot(distribution_plot, aes(x = week, 
